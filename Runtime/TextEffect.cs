@@ -249,6 +249,16 @@ namespace EasyTextEffects
             onStartTagEffects_.ForEach(_entry => _entry.effect.StopEffect());
         }
 
+        public void CallStartManualEffect(string _effectName)
+        {
+            StartManualEffect(_effectName);
+        }
+
+        public void CallStartManualTagEffect(string _effectName)
+        {
+            StartManualTagEffect(_effectName);
+        }
+        
         public void StartManualEffects()
         {
             manualEffects_.ForEach(_entry => _entry.StartEffect());
