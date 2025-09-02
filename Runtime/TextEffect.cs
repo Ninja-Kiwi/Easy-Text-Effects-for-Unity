@@ -28,7 +28,11 @@ namespace EasyTextEffects
         public List<GlobalTextEffectEntry> globalEffects;
 
         [Space(5)] [Range(1, 120)] public int updatesPerSecond = 30;
-
+        
+        private static readonly List<TextEffectEntry> EmptyEffectEntryList = new();
+        private static readonly List<GlobalTextEffectEntry> EmptyGlobalEffectEntryList = new();
+        private readonly HashSet<TextEffectInstance> monitoredEffects = new ();
+        
         private List<TextEffectEntry> allTagEffects_;
         private List<TextEffectEntry> onStartTagEffects_;
         private List<TextEffectEntry> manualTagEffects_;
@@ -142,8 +146,35 @@ namespace EasyTextEffects
             return results;
         }
 
+        private void ListenForEffectChanges()
+        {
+            var effects = (tagEffects ?? EmptyEffectEntryList)
+                          .Concat(globalEffects ?? EmptyGlobalEffectEntryList)
+                          .Where(entry => entry.effect)
+                          .Select(entry => entry.effect)
+                          .ToHashSet();
+
+            foreach (var effect in effects.Where(effect => monitoredEffects.Add(effect)))
+                effect.OnValueChanged += Refresh;
+            
+            monitoredEffects.RemoveWhere(effect =>
+            {
+                if (effects.Contains(effect)) return false;
+                effect.OnValueChanged -= Refresh;
+                return true;
+            });
+        }
+
+        private void StopListeningForEffectChanges()
+        {
+            monitoredEffects.ForEach(x => x.OnValueChanged -= Refresh);
+            monitoredEffects.Clear();
+        }
+
         public void Refresh()
         {
+            ListenForEffectChanges();
+            
             if (text == null)
                 return;
             text.ForceMeshUpdate();
@@ -175,6 +206,7 @@ namespace EasyTextEffects
 #if UNITY_EDITOR
             EditorApplication.update -= Update;
 #endif
+            StopListeningForEffectChanges();
         }
 
         private float nextUpdateTime_ = 0;
@@ -279,28 +311,35 @@ namespace EasyTextEffects
             manualTagEffects_.ForEach(_entry => _entry.effect.StopEffect());
         }
 
-        public GlobalTextEffectEntry StartManualEffect(string _effectName)
+        public GlobalTextEffectEntry FindManualEffect(string _effectName)
+        {
+            return manualEffects_.Find(_entry => _entry.effect.effectTag == _effectName);
+        }
+
+        public void StartManualEffect(string _effectName)
         {
             GlobalTextEffectEntry effectEntry = manualEffects_.Find(_entry => _entry.effect.effectTag == _effectName);
             if (effectEntry != null)
             {
                 effectEntry.StartEffect();
-                return effectEntry;
             }
-            Debug.LogWarning($"Effect {_effectName} not found. Available effects: {string.Join(", ", manualEffects_.Select(_entry => _entry.effect.effectTag).ToList())}");
-            return null;
+            else
+            {
+                Debug.LogWarning($"Effect {_effectName} not found. Available effects: {string.Join(", ", manualEffects_.Select(_entry => _entry.effect.effectTag).ToList())}");
+            }
         }
 
-        public TextEffectEntry StartManualTagEffect(string _effectName)
+        public void StartManualTagEffect(string _effectName)
         {
             TextEffectEntry effectEntry = manualTagEffects_.Find(_entry => _entry.effect.effectTag == _effectName);
             if (effectEntry != null)
             {
                 effectEntry.StartEffect();
-                return effectEntry;
             }
-            Debug.LogWarning($"Effect {_effectName} not found. Available effects: {string.Join(", ", manualEffects_.Select(_entry => _entry.effect.effectTag).ToList())}");
-            return null;
+            else
+            {
+                Debug.LogWarning($"Effect {_effectName} not found. Available effects: {string.Join(", ", manualEffects_.Select(_entry => _entry.effect.effectTag).ToList())}");
+            }
         }
 
         public List<TextEffectStatus> QueryEffectStatuses(TextEffectType _effectType,
